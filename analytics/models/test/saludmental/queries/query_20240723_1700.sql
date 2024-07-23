@@ -18,7 +18,7 @@ inner join [datalake].[Prestacion].[GrupoPrestacion] gp ON gp.IdGrupoPrestacion 
 inner join [datalake].[Prestacion].[SubgrupoPrestacion] sp ON (sp.IdSubgrupoPrestacion = sap.IdSubgrupoPrestacion) and (sp.IdSubgrupoPrestacion = gsp.IdSubgrupoPrestacion) and sp.Vigencia = 1
 inner join [datalake].[Prestacion].[AperturaPrestacion] ap ON ap.IdAperturaPrestacion = sap.IdAperturaPrestacion and ap.Vigencia = 1
 inner join [datalake].[Prestacion].[PatologiaAsociada] pa ON pa.IdPatologiaAsociada = dp.IdPatologiaAsociada and pa.Vigencia = 1
-where gp.ClasificacionSubgrupo = 'SALUD MENTAL'
+where sp.ClasificacionSubgrupo = 'SALUD MENTAL'
 
 --------------------------------------------------------------------------------
 ------------------------ SINIESTROS --------------------------------------------
@@ -95,8 +95,8 @@ inner join bos.bos.prestador pre on ps.idprestador = pre.idprestador
 inner join suscripcion.dbo.isapre isa on isa.idIsapre = sin.IdPrevisionAsegurado and isa.vigente = 1
 
 select  RIGHT('0000000000' + CONVERT(VARCHAR(10), RutTitular), 12) as RutTitular, 
-		RIGHT('0000000000' + CONVERT(VARCHAR(10), RutBeneficiario), 12) as RutBeneficiario, 
-		NumeroSolicitud, CodigoBeneficio,
+		RIGHT('0000000000' + CONVERT(VARCHAR(10), RutBeneficiario), 12) as RutBeneficiario,
+		NumeroSolicitud,
 		IdGrupoPrestacion, ClasificacionGrupo, IdSubgrupoPrestacion, ClasificacionSubgrupo, IdAperturaPrestacion, ClasificacionApertura,
 		sum(Cantidad) Cantidad, 
 		sum(ValorPrestacionCLP) ValorPrestacionCLP, sum(ValorPrestacionCLP) / sum(Cantidad) CostoUnitarioCLP,
@@ -108,7 +108,7 @@ select  RIGHT('0000000000' + CONVERT(VARCHAR(10), RutTitular), 12) as RutTitular
 		NombrePrestador
 into #siniestros1
 from #siniestros0
-group by RutTitular,  RutBeneficiario, NumeroSolicitud, CodigoBeneficio, FechaPrestacion, FechaRecepcionLiquidacion, Prevision, RutPrestador, NombrePrestador,
+group by RutTitular, RutBeneficiario, NumeroSolicitud, FechaPrestacion, FechaRecepcionLiquidacion, Prevision, RutPrestador, NombrePrestador,
 		 IdGrupoPrestacion, ClasificacionGrupo, IdSubgrupoPrestacion, ClasificacionSubgrupo, IdAperturaPrestacion, ClasificacionApertura
 having sum(Cantidad) > 0 and sum(Cantidad) < 100 and sum(ValorPrestacionCLP) > 0
 
@@ -128,24 +128,17 @@ inner join DesarrolloBI.Modelo.ModeloGenerico mg on mg.IdModeloGenerico = ma.IdM
 inner join DesarrolloBI.Modelo.Estadistico es on es.IdModeloAnalitico = ma.IdModeloAnalitico and es.Vigencia = 1
 inner join DesarrolloBI.Modelo.CriterioOutlierLiquidacion co on co.IdEstadistico = es.IdEstadistico and co.Vigencia = 1
 
--- drop table if exists #clasifoutlier
-select cla.CodigoPrestacion, cla.GlosaPrestacionHomologada, CriterioCantidadAlta, CriterioCostoUnitarioBajo, CriterioCostoUnitarioAlto
-into #clasifoutlier
-from #clasif cla
-inner join #criteriooutlier co on co.IdGrupoPrestacion = cla.IdGrupoPrestacion 
-									and co.IdSubgrupoPrestacion = cla.IdSubgrupoPrestacion 
-									and co.IdAperturaPrestacion = cla.IdAperturaPrestacion
-
 
 -- drop table if exists #siniestros2
-select  sin.*, co.CodigoPrestacion, co.CriterioCantidadAlta, co.CriterioCostoUnitarioBajo, co.CriterioCostoUnitarioAlto,
+select  sin.*, co.CriterioCantidadAlta, co.CriterioCostoUnitarioBajo, co.CriterioCostoUnitarioAlto,
 		case when sin.Cantidad > co.CriterioCantidadAlta then 1 else 0 end OutlierCantidadAlta,
 		case when sin.CostoUnitarioCLP >= co.CriterioCostoUnitarioAlto then 1 else 0 end OutlierCostoAlto,
 		case when sin.CostoUnitarioCLP <= co.CriterioCostoUnitarioBajo then 1 else 0 end OutlierCostoBajo
 into #siniestros2
 from #siniestros1 sin
-left join #clasifoutlier co on co.CodigoPrestacion = sin.CodigoBeneficio
-
+left join #criteriooutlier co on co.IdGrupoPrestacion = sin.IdGrupoPrestacion 
+									and co.IdSubgrupoPrestacion = sin.IdSubgrupoPrestacion 
+									and co.IdAperturaPrestacion = sin.IdAperturaPrestacion
 
 -- drop table if exists #siniestros3
 select * into #siniestros3
@@ -157,8 +150,8 @@ where OutlierCantidadAlta = 0 and OutlierCostoBajo = 0 and OutlierCostoAlto = 0
 --------------------------------------------------------------------------------
 
 select	RutTitular, RutBeneficiario,
-		NumeroSolicitud, CodigoBeneficio as CodigoPrestacion,
-		IdGrupoPrestacion, ClasificacionGrupo, IdSubgrupoPrestacion, ClasificacionSubgrupo, IdAperturaPrestacion,ClasificacionApertura,
+		NumeroSolicitud,
+		IdGrupoPrestacion, ClasificacionGrupo, IdSubgrupoPrestacion, ClasificacionSubgrupo, IdAperturaPrestacion, ClasificacionApertura,
 		Cantidad, ValorPrestacionCLP, ValorPrestacionUF, CostoUnitarioCLP, ValorReclamadoCLP, ValorPagoUF, ValorPagoCLP,
 		FechaPrestacion, FechaRecepcionLiquidacion, Prevision,
 		RutPrestador, NombrePrestador
