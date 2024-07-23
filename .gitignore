@@ -1,0 +1,3 @@
+# Ignorar todas las carpetas pycache
+*_pycache_
+~$*
