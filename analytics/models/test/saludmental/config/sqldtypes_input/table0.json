@@ -1,0 +1,25 @@
+{
+    
+    "ruttitular":                   {"dtype":"str"}, 
+    "rutbeneficiario":              {"dtype":"str"}, 
+    "numerosolicitud":              {"dtype":"str"}, 
+    "idgrupoprestacion":            {"dtype":"int"},
+    "clasificaciongrupo":           {"dtype":"str"}, 
+    "idsubgrupoprestacion":         {"dtype":"int"}, 
+    "clasificacionsubgrupo":        {"dtype":"str"},
+    "idaperturaprestacion":         {"dtype":"int"}, 
+    "clasificacionapertura":        {"dtype":"str"}, 
+    "cantidad":                     {"dtype":"int"},
+    "valorprestacionclp":           {"dtype":"int"},
+    "valorprestacionuf":            {"dtype":"float"},
+    "costounitarioclp":             {"dtype":"int"},
+    "valorreclamadoclp":            {"dtype":"int"},
+    "valorpagouf":                  {"dtype":"float"},
+    "valorpagoclp":                 {"dtype":"int"},
+    "fechaprestacion":              {"dtype":"datetime"},
+    "fecharecepcionliquidacion":    {"dtype":"datetime"},
+    "prevision":                    {"dtype":"str"},
+    "rutprestador":                 {"dtype":"str"},
+    "nombreprestador":              {"dtype":"str"}
+
+}

@@ -33,6 +33,23 @@ def READ_JSON(file, method='dict'):
     
     return output
 
+def ADD_ROWID(dataframe, colname = 'uniqueid'):
+
+    import numpy as np
+    import pandas as pd
+
+    dataframe = dataframe.copy()
+    
+    dataframe[colname] = np.arange(len(dataframe))
+    dataframe[colname] = dataframe[colname].astype(str)
+    
+    lastid = dataframe[colname].values[-1]
+    dataframe[colname] = 'id_' +dataframe[colname].apply(lambda x: x.zfill(len(lastid)))
+    dataframe.set_index(colname, inplace=True)
+
+    return dataframe
+
+
 # ----------------- ALMACENAR ARCHIVOS -----------------
 def GET_NOW_STRING():
      
