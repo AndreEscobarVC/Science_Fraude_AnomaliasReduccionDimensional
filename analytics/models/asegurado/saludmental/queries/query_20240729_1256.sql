@@ -86,7 +86,7 @@ where GlosaBeneficio = 'BENEFICIOS DE SALUD MENTAL' or ClasificacionSubgrupo = '
 group by RutTitular
 
 --------------------------------------------------------------------------------
------------------------------ SINIESTROS -----------------------------------------
+----------------------------- SINIESTROS ---------------------------------------
 --------------------------------------------------------------------------------
 
 drop table if exists #siniestros1
@@ -96,22 +96,29 @@ select	case when sin.RutTitular = sin.RutSiniestrado then 'Titular' else 'Carga'
 		sin.RutSiniestrado, case when pb.sexo = 'F' then 1 else 0 end SiniestradoFemenino, datediff(day, pb.fechanacimiento, sd2.fechabeneficio)/365 EdadSiniestrado,
 		
 		case when isa.glosa = 'FONASA' then 'FONASA' else 'NO FONASA' end Prevision,
+		cat.GlosaHomologacion as CanalLiquidacion,
 
 		den.NumeroDenuncio as NumeroSolicitud,
+
+		sd2.FechaBeneficio as FechaPrestacion,
+		convert(varchar(6), sd2.FechaBeneficio, 112) as PeriodoPrestacion,
 		sin.fecharecepcionliquidacionvc as FechaRecepcionLiquidacion, 
-			
+		convert(varchar(6), sin.fecharecepcionliquidacionvc, 112) as PeriodoLiquidacion,
+		
 		cast(sd2.CodigoBeneficio as int) CodigoBeneficio, 
 		cla.IdGrupoPrestacion, cla.ClasificacionGrupo, 
 		cla.IdSubgrupoPrestacion, cla.ClasificacionSubgrupo, 
 		cla.IdAperturaPrestacion, cla.ClasificacionApertura,
 
 		ig.Glosa GlosaBeneficio,
-		case when ig.Glosa = 'BENEFICIO DE HOSPITALIZACIÓN' or cat.IdCategorizacionCanal in (6, 12, 15, 16, 48) then 1 else 0 end Hospitalizacion,
+		case when ig.Codigo = 100 or cat.IdCategorizacionCanal in (6, 12, 15, 16, 48) then 1 else 0 end Hospitalizacion,
 
 		sd2.cantidad,
 		sd2.MontoValorBeneficio as ValorPrestacionCLP,
-		sd2.MontoReclamado as MontoReclamadoCLP,
-		sd2.MontoLiquidado as MontoIndemnizarCLP,
+		sd2.MontoAporteInstitucionSalud as ValorPrevisionCLP,
+		sd2.MontoReclamado as ValorReclamadoCLP,
+		sd2.MontoLiquidado as ValorIndemnizarCLP,
+		sd2.MontoDeduciblePrestacion as ValorDeducibleCLP,
 		sd2.MontoLiquidado - sd2.MontoDeduciblePrestacion as ValorPagoCLP,
 	
 		case when sd2.IdLiquidacionDetalleEstado = 1 then 'APROBADA'
@@ -169,20 +176,16 @@ inner join Suscripcion.dbo.Persona p on p.idpersona = sin.IdTitular
 inner join Suscripcion.dbo.Persona pb on pb.idpersona = sin.IdSiniestrado
 
 left join bos.bos.liquidaciondetallerechazo sdr	on	sdr.idliquidaciondetalle=sd2.idliquidaciondetalle
--- left join bos.bos.RechazoTipo rt on	rt.idRechazoTipo=sdr.idRechazoTipo
-
-
-select * from #siniestros1 where Estado <> 'RECHAZADA' order by ValorPrestacionCLP desc
 
 --------------------------------------------------------------------------------
 ------------------------ DEMOGRAFICO -------------------------------------------
 --------------------------------------------------------------------------------
 
-drop table if exists #siniestros2
-select *, case when EdadBeneficiario <= 14 then 1 else 0 end PacientePediatrico,
-		  case when EdadBeneficiario >= 70 then 1 else 0 end PacienteGeriatrico
-into #siniestros2
-from #siniestros1
+--drop table if exists #siniestros2
+--select *, case when EdadSiniestrado <= 14 then 1 else 0 end PacientePediatrico,
+--		  case when EdadSiniestrado >= 70 then 1 else 0 end PacienteGeriatrico
+--into #siniestros2
+--from #siniestros1
 
 --------------------------------------------------------------------------------
 ------------------------ DIAGNOSTICOS ------------------------------------------
@@ -214,3 +217,90 @@ select s.*, case when di.Diagnosticos is null then 0 else di.Diagnosticos end Di
 into #siniestros2
 from #siniestros1 s
 left join #diagnosticos_sm1 di on di.RutTitular = s.RutTitular
+
+--drop table if exists #siniestros4
+--select s.*, case when aux.RutTitular is null then 0 else aux.SolicitudesRechazadas end SolicitudesRechazadas
+--into #siniestros4
+--from #siniestros3 s
+--left join	(
+--			select RutTitular, count(distinct NumeroSolicitud) SolicitudesRechazadas
+--			from #siniestros3 s
+--			where s.Estado = 'RECHAZADA'
+--			group by RutTitular 
+--			) aux on aux.RutTitular = s.RutTitular
+--where s.Estado = 'APROBADA'
+
+--------------------------------------------------------------------------------
+------------------------ PRESTADORES -------------------------------------------
+--------------------------------------------------------------------------------
+
+drop table if exists #prestadores0
+select	pre.rutprestador as RutPrestador,
+		max(pre.NombrePrestador) as NombrePrestador,
+		count(distinct sin.RutSiniestrado) PrestadorBeneficiarios, 
+		avg(cast(case when isa.glosa = 'FONASA' then 1 else 0 end as float)) PrestadorFonasa,
+		avg(cast(case when cat.GlosaHomologacion = 'Bonificacion I-Med' then 1 else 0 end as float)) PrestadorImed,
+		count(distinct den.NumeroDenuncio) PrestadorSolicitudes,
+		count(distinct cast(sd2.CodigoBeneficio as int)) PrestadorPrestaciones, 
+		sum(sd2.MontoConversionBeneficio) as PrestadorValorPrestacion,
+		sum(sd2.MontoConversionLiquidado) as PrestadorValorPago
+into #prestadores0
+from bos.bos.siniestro sin
+inner join bos.bos.denuncio den on den.iddenuncio = sin.iddenuncio and sin.vigente = 1 and sin.IdPlanBeneficio not like 'DEN%'
+inner join bos.bos.siniestrodocumento sd on sd.idsiniestro = sin.idsiniestro
+inner join bos.bos.prestadorsucursal ps on sd.idprestadorsucursal = ps.idprestadorsucursal
+inner join bos.bos.prestador pre on ps.idprestador = pre.idprestador 
+inner join	(
+			select RutPrestador, max(FechaRecepcionLiquidacion) FechaHasta, dateadd(month, -3, max(FechaRecepcionLiquidacion)) FechaDesde
+			from #siniestros2 
+			group by RutPrestador
+			) aux on aux.RutPrestador = pre.RutPrestador and sin.FechaRecepcionLiquidacionVC between aux.FechaDesde and aux.FechaHasta
+inner join bos.bos.liquidaciondetalle sd2 on sd2.idSiniestroDocumento=sd.idSiniestroDocumento and sd2.IdLiquidacionDetalleEstado = 1
+inner join bos.bos.liquidacion liq on liq.idSiniestro = sin.idSiniestro
+inner join bos.bos.categorizacioncanal cat on sin.IdCanal = cat.IdCanal and sin.IdDenuncioClasificacion = cat.IdDenuncioClasificacion and sin.IdDenuncioTipo = cat.IdDenuncioTipo
+																		and cat.IdCategorizacionCanal <> 5  -- dental
+																		and cat.IdCategorizacionCanal <> 11 -- dental
+																		and cat.IdCategorizacionCanal <> 14 -- dental
+																		and cat.IdCategorizacionCanal <> 27 -- dental
+																		and cat.IdCategorizacionCanal <> 3  -- medicamentos 
+																		and cat.IdCategorizacionCanal <> 9  -- medicamentos 
+																		and cat.IdCategorizacionCanal <> 29 -- medicamentos
+																		and cat.IdCategorizacionCanal <> 30 -- medicamentos 
+																		and cat.IdCategorizacionCanal <> 31 -- medicamentos 
+																		and cat.IdCategorizacionCanal <> 32 -- medicamentos 
+																		and cat.IdCategorizacionCanal <> 44 -- medicamentos 
+																		and cat.IdCategorizacionCanal <> 45 -- medicamentos 
+																		and cat.IdCanal <> 9								-- Quito Denuncia Liquidador
+																		and cat.IdDenuncioTipo <> 2							-- Quito Dental
+																		and cat.IdDenuncioTipo <> 4 and cat.IdCanal <> 2	-- Quito Medicamentos 
+																		and cat.IdCanal <> 7								-- Quito Consalud
+																		and cat.IdCanal <> 6								-- Quito Medipass
+																		and cat.IdCanal <> 5 and cat.IdDenuncioTipo <> 5	-- Quito los OP
+inner join suscripcion.dbo.isapre isa on isa.idIsapre = sin.IdPrevisionAsegurado and isa.vigente = 1
+inner join AUS.Siniestralidad.InstanciaGeneral ig on ig.Codigo=sd2.IdGrupo and (ig.codigo <> 300 and ig.codigo <> 700 and ig.codigo <> 800 and ig.codigo <> 900)
+group by pre.RutPrestador
+
+drop table if exists #siniestros3
+select s.*, 
+	   p.NombrePrestador, p.PrestadorFonasa, p.PrestadorImed,
+	   p.PrestadorBeneficiarios, p.PrestadorSolicitudes, p.PrestadorPrestaciones, 
+	   p.PrestadorValorPrestacion, p.PrestadorValorPago
+into #siniestros3
+from #siniestros2 s
+inner join #prestadores0 p on p.RutPrestador = s.RutPrestador
+
+-- En futuras correcciones es posible integrar la homologacion prestador para identificar prestadores principales
+
+--------------------------------------------------------------------------------
+------------------------ EXPORTAR RESULTADOS -----------------------------------
+--------------------------------------------------------------------------------
+
+select RolPersona, RutTitular, TitularFemenino, EdadTitular, RutSiniestrado, SiniestradoFemenino, EdadSiniestrado, 
+	   Prevision, CanalLiquidacion,
+	   FechaPrestacion, PeriodoPrestacion, FechaRecepcionLiquidacion FechaLiquidacion, PeriodoLiquidacion,
+	   NumeroSolicitud, CodigoBeneficio, ClasificacionGrupo, ClasificacionSubgrupo, ClasificacionApertura,
+	   GlosaBeneficio, Hospitalizacion, Cantidad, 
+	   ValorPrestacionCLP, ValorPrevisionCLP, ValorReclamadoCLP, ValorIndemnizarCLP, ValorDeducibleCLP, ValorPagoCLP,
+	   RutPrestador, NombrePrestador, PrestadorFonasa, PrestadorImed, PrestadorBeneficiarios, PrestadorSolicitudes, PrestadorPrestaciones,
+	   PrestadorValorPrestacion, PrestadorValorPago
+from #siniestros3
